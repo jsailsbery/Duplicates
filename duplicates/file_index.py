@@ -2,11 +2,28 @@ import os
 import hashlib
 import logging
 import json
+import tempfile
 
 class FileIndex:
-    def __init__(self, index_file="file_index.json",directories_file="scanned_directories.json", force_update=False, deep_scan=False):
-        self.index_file = index_file
-        self.directories_file = directories_file
+    #def __init__(self, index_file="file_index.json",directories_file="scanned_dirs.json", force_update=False, deep_scan=False):
+        #self.index_file = index_file
+        #self.directories_file = directories_file
+
+    def __init__(self, index_file: str="", directories_file: str="", force_update: bool=False, deep_scan: bool=False):
+
+        # Create a temporary file for the index of directory1
+        with tempfile.NamedTemporaryFile(suffix="_index.json", mode="w", delete=False) as temp_file:
+            json.dump({}, temp_file)
+            temp_index_file = temp_file.name
+        with tempfile.NamedTemporaryFile(suffix="_dirs.json", mode="w", delete=False) as temp_file:
+            json.dump([], temp_file)
+            temp_dirs_file = temp_file.name
+
+	# set json files
+        self.index_file = index_file if index_file else temp_index_file
+        self.directories_file = directories_file if directories_file else temp_dirs_file
+
+        # load previous data
         self.scanned_directories = self.load_scanned_directories()
         self.file_index = self.load_file_index()
 
@@ -87,30 +104,36 @@ class FileIndex:
                     md5_checksum = self.calculate_md5(file_path)
                     self.file_index[file_path] = md5_checksum
 
-    def update(self, deep_scan=False):
-        # Step 1: Check and remove directories that no longer exist
+    def update(self, deep_scan: bool = False):
+        """
+        Update the file index by performing the following steps:
+
+        Args:
+            deep_scan (bool, optional): If True, recalculate MD5 values for all existing files. Default is False.
+
+        Returns:
+            None
+        """
         logging.info("Step 1: Check and remove directories that no longer exist")
-        
-        existing_directories = []
-        for directory in self.scanned_directories:
-            if os.path.exists(directory):
-                existing_directories.append(directory)
-        self.scanned_directories = existing_directories
+        self.scanned_directories = [d for d in self.scanned_directories if os.path.exists(d)]
 
-        # Step 2: Scan all files in file_index and remove if they no longer exist
         logging.info("Step 2: Scan all files in file_index and remove non-existent files")
-        existing_files = {}
-        for file_path, hash_value in self.file_index.items():
-            if os.path.exists(file_path):
-                existing_files[file_path] = hash_value
-        self.file_index = existing_files
+        self.file_index = {f:h for f,h in self.file_index.items() if os.path.exists(f)}
 
-        # Step 3: Recalculate MD5 values for existing files
+        logging.info("Step 3: Scan all existing directories for new files and add their hashes")
+        for directory in self.scanned_directories:
+            for root, _, files in os.walk(directory):
+                for file_name in files:
+                    file_path = os.path.join(root, file_name)
+                    if file_path not in self.file_index and os.path.isfile(file_path):
+                        self.set_hash(file_path)
+
         if deep_scan:
-            logging.info("Step 3: Recalculate MD5 values for existing files")
+            logging.info("Step 4: Recalculate MD5 values for existing files")
             for file_path in self.file_index.keys():
-                self.file_index[file_path] = self.calculate_md5(file_path)
+                self.set_hash(file_path)
 
         # Save the updated list of scanned directories and file index
         self.save_scanned_directories()
         self.save_file_index()
+

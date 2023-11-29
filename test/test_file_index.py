@@ -11,6 +11,7 @@ from duplicates.file_index import FileIndex
 # Define the test directory and index file for testing
 TEST_DIRECTORY = "test_directory"
 TEST_INDEX_FILE = "test_file_index.json"
+TEST_DIRS_FILE = "test_scanned_dirs.json"
 
 # Create a fixture for initializing and cleaning up the FileIndex object
 @pytest.fixture
@@ -23,12 +24,13 @@ def file_index():
         f.write("Test content 2")
 
     # Initialize the FileIndex object
-    file_index = FileIndex(TEST_INDEX_FILE)
+    file_index = FileIndex(TEST_INDEX_FILE, TEST_DIRS_FILE)
     yield file_index  # Provide the fixture to the tests
 
     # Clean up: Remove the test directory and index file
     try:
         os.remove(TEST_INDEX_FILE)
+        os.remove(TEST_DIRS_FILE)
         shutil.rmtree(TEST_DIRECTORY, ignore_errors=True)
     except FileNotFoundError:
         pass
