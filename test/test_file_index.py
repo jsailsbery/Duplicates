@@ -46,6 +46,30 @@ def temp_test_file():
         # Clean up: Remove the temporary test file
         os.remove(temp_file_path)
 
+# Define a fixture for creating a temporary directory
+@pytest.fixture
+def temp_directory():
+    temp_dir = tempfile.mkdtemp()
+    with open(os.path.join(temp_dir, "test_file1.txt"), "w") as f:
+        f.write("Test content 1")
+    with open(os.path.join(temp_dir, "test_file2.txt"), "w") as f:
+        f.write("Test content 2")
+
+    yield temp_dir
+    shutil.rmtree(temp_dir)
+
+# Define a fixture for creating a second temporary directory
+@pytest.fixture
+def second_temp_directory():
+    temp_dir = tempfile.mkdtemp()
+    with open(os.path.join(temp_dir, "test_file1.txt"), "w") as f:
+        f.write("Test content 1")
+    with open(os.path.join(temp_dir, "test_file2.txt"), "w") as f:
+        f.write("Test content 2")
+
+    yield temp_dir
+    shutil.rmtree(temp_dir)
+
 def test_get_hash(file_index, temp_test_file):
     test_hash = file_index.calculate_md5(temp_test_file)
     file_index.set_hash(temp_test_file)
@@ -177,4 +201,57 @@ def test_update(file_index):
     assert test_file2 in file_index.file_index
     assert file_index.file_index[test_file1] != "hash1"  # Hash should be updated
     assert file_index.file_index[test_file2] != "hash2"  # Hash should be updated
+
+
+# Test the add method
+def test_add(temp_directory):
+    # Create two FileIndex objects
+    file_index1 = FileIndex(index_file=os.path.join(temp_directory, "index1.json"))
+    file_index2 = FileIndex(index_file=os.path.join(temp_directory, "index2.json"))
+
+    # Populate file_index1 with some data
+    file_index1.create_file_index(temp_directory)
+    file_index1.save_file_index()
+
+    # Populate file_index2 with different data
+    temp_subdirectory = os.path.join(temp_directory, "subdirectory")
+    os.mkdir(temp_subdirectory)
+    file_index2.create_file_index(temp_subdirectory)
+    file_index2.save_file_index()
+
+    # Create a GlobalFileIndex object and add both file_index1 and file_index2
+    global_index = FileIndex()
+    global_index.add(file_index1)
+    global_index.add(file_index2)
+
+    # Check if scanned directories and file index are merged correctly
+    assert temp_directory in global_index.scanned_directories
+    assert temp_subdirectory in global_index.scanned_directories
+    assert len(global_index.file_index) == len(file_index1.file_index) + len(file_index2.file_index)
+
+# Test the find_duplicates method
+def test_find_duplicates(temp_directory, second_temp_directory):
+    # Create two FileIndex objects
+    local_file_index = FileIndex(index_file=os.path.join(temp_directory, "local_index.json"))
+    global_file_index = FileIndex(index_file=os.path.join(temp_directory, "global_index.json"))
+
+    # Populate local_file_index with some data
+    local_file_index.create_file_index(temp_directory)
+    local_file_index.save_file_index()
+    assert len(local_file_index.file_index) > 0
+
+    # Populate global_file_index with some different data
+    global_file_index.create_file_index(second_temp_directory)
+    global_file_index.save_file_index()
+    assert len(global_file_index.file_index) > 0
+
+    # Create a GlobalFileIndex object and add global_file_index
+    global_index = FileIndex()
+    global_index.add(global_file_index)
+
+    # Find duplicates between local_file_index and global_index
+    duplicates = global_index.find_duplicates(local_file_index)
+
+    # Check if duplicates are found correctly
+    assert len(duplicates) > 0
 

@@ -14,14 +14,14 @@ class FileIndex:
         # Create a temporary file for the index of directory1
         with tempfile.NamedTemporaryFile(suffix="_index.json", mode="w", delete=False) as temp_file:
             json.dump({}, temp_file)
-            temp_index_file = temp_file.name
+            self.temp_index_file = temp_file.name
         with tempfile.NamedTemporaryFile(suffix="_dirs.json", mode="w", delete=False) as temp_file:
             json.dump([], temp_file)
-            temp_dirs_file = temp_file.name
+            self.temp_dirs_file = temp_file.name
 
 	# set json files
-        self.index_file = index_file if index_file else temp_index_file
-        self.directories_file = directories_file if directories_file else temp_dirs_file
+        self.index_file = index_file if index_file else self.temp_index_file
+        self.directories_file = directories_file if directories_file else self.temp_dirs_file
 
         # load previous data
         self.scanned_directories = self.load_scanned_directories()
@@ -37,6 +37,10 @@ class FileIndex:
         """Destructor: Save the file index when the class is destroyed."""
         self.save_file_index()
         self.save_scanned_directories()
+        if os.path.exists(self.temp_index_file):
+            os.remove(self.temp_index_file)
+        if os.path.exists(self.temp_dirs_file):
+            os.remove(self.temp_dirs_file)
 
     def load_file_index(self):
         """Load the file index from the JSON file."""
@@ -136,4 +140,42 @@ class FileIndex:
         # Save the updated list of scanned directories and file index
         self.save_scanned_directories()
         self.save_file_index()
+
+    def add(self, file_index: 'FileIndex'):
+        """
+        Add the scanned directories and file index from another FileIndex object to this FileIndex.
+
+        Args:
+            file_index (FileIndex): The FileIndex object to absorb.
+
+        Returns:
+            None
+        """
+        # Merge scanned directories (no duplicates)
+        self.scanned_directories.extend([d for d in file_index.scanned_directories if d not in self.scanned_directories])
+
+        # Merge file index (overwrite if file already exists)
+        self.file_index.update(file_index.file_index)
+
+        # Save the updated global index
+        self.save_scanned_directories()
+        self.save_file_index()
+
+    def find_duplicates(self, local_file_index: 'FileIndex'):
+        """
+        Find duplicate files in a FileIndex compared to this FileIndex.
+
+        Args:
+            local_file_index (FileIndex): The FileIndex object to compare against the global index.
+
+        Returns:
+            list: A list of tuples containing duplicate file pairs.
+        """
+        duplicates = []
+        for file_path1, hash1 in local_file_index.file_index.items():
+            for matching_file in self.compare_hash_to_dictionary(hash1):
+                if matching_file != file_path1:
+                    duplicates.append((file_path1, matching_file))
+
+        return duplicates
 
