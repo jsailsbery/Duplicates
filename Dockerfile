@@ -10,6 +10,7 @@ RUN pip install --trusted-host pypi.python.org -r requirements.txt
 
 # Copy the current directory contents into the container at /app
 COPY . /app
+RUN chmod +x /app/scripts/*
 
 # Define environment variable for Python to run in unbuffered mode
 ENV PYTHONUNBUFFERED 1
@@ -17,7 +18,6 @@ ENV PYTHONUNBUFFERED 1
 # Add the project directory to the Python path
 ENV PYTHONPATH "${PYTHONPATH}:/app"
 
-# Run your program or tests here
-# For example, to run pytest:
-CMD ["python", "duplicates/file_index.py"]
+# Run the entrypoint script when the container starts
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 
